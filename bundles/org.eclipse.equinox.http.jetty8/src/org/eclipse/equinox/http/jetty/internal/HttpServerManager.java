@@ -24,9 +24,10 @@ import org.eclipse.jetty.server.bio.SocketConnector;
 import org.eclipse.jetty.server.nio.SelectChannelConnector;
 import org.eclipse.jetty.server.session.HashSessionManager;
 import org.eclipse.jetty.server.session.SessionHandler;
-import org.eclipse.jetty.server.ssl.SslSocketConnector;
+import org.eclipse.jetty.server.ssl.SslSelectChannelConnector;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
+import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.osgi.framework.Constants;
 import org.osgi.service.cm.ConfigurationException;
 import org.osgi.service.cm.ManagedServiceFactory;
@@ -198,7 +199,6 @@ public class HttpServerManager implements ManagedServiceFactory {
 		return Boolean.TRUE;
 	}
 
-	@SuppressWarnings("deprecation")
 	private Connector createHttpsConnector(@SuppressWarnings("rawtypes") Dictionary dictionary) {
 		Boolean httpsEnabled = null;
 		Object httpsEnabledObj = dictionary.get(JettyConstants.HTTPS_ENABLED);
@@ -220,49 +220,48 @@ public class HttpServerManager implements ManagedServiceFactory {
 		if (httpsPort == null)
 			return null;
 
-		SslSocketConnector sslConnector = new SslSocketConnector();
-		sslConnector.setPort(httpsPort.intValue());
-
-		String httpsHost = (String) dictionary.get(JettyConstants.HTTPS_HOST);
-		if (httpsHost != null) {
-			sslConnector.setHost(httpsHost);
-		}
-
-		String keyStore = (String) dictionary.get(JettyConstants.SSL_KEYSTORE);
-		if (keyStore != null)
-			sslConnector.setKeystore(keyStore);
+		SslContextFactory sslContextFactory = new SslContextFactory();
+		String keyStorePath = (String) dictionary.get(JettyConstants.SSL_KEYSTORE);
+		if (keyStorePath != null)
+			sslContextFactory.setKeyStorePath(keyStorePath);
 
 		String password = (String) dictionary.get(JettyConstants.SSL_PASSWORD);
 		if (password != null)
-			sslConnector.setPassword(password);
+			sslContextFactory.setKeyStorePassword(password);
 
 		String keyPassword = (String) dictionary.get(JettyConstants.SSL_KEYPASSWORD);
 		if (keyPassword != null)
-			sslConnector.setKeyPassword(keyPassword);
+			sslContextFactory.setKeyManagerPassword(keyPassword);
 
 		Object needClientAuth = dictionary.get(JettyConstants.SSL_NEEDCLIENTAUTH);
 		if (needClientAuth != null) {
 			if (needClientAuth instanceof String)
 				needClientAuth = Boolean.valueOf((String) needClientAuth);
-
-			sslConnector.setNeedClientAuth(((Boolean) needClientAuth).booleanValue());
+			sslContextFactory.setNeedClientAuth(((Boolean) needClientAuth).booleanValue());
 		}
 
 		Object wantClientAuth = dictionary.get(JettyConstants.SSL_WANTCLIENTAUTH);
 		if (wantClientAuth != null) {
 			if (wantClientAuth instanceof String)
 				wantClientAuth = Boolean.valueOf((String) wantClientAuth);
-
-			sslConnector.setWantClientAuth(((Boolean) wantClientAuth).booleanValue());
+			sslContextFactory.setWantClientAuth(((Boolean) wantClientAuth).booleanValue());
 		}
 
 		String protocol = (String) dictionary.get(JettyConstants.SSL_PROTOCOL);
 		if (protocol != null)
-			sslConnector.setProtocol(protocol);
+			sslContextFactory.setProtocol(protocol);
 
 		String keystoreType = (String) dictionary.get(JettyConstants.SSL_KEYSTORETYPE);
 		if (keystoreType != null)
-			sslConnector.setKeystoreType(keystoreType);
+			sslContextFactory.setKeyStoreType(keystoreType);
+
+		SslSelectChannelConnector sslConnector = new SslSelectChannelConnector(sslContextFactory);
+		sslConnector.setPort(httpsPort.intValue());
+
+		String httpsHost = (String) dictionary.get(JettyConstants.HTTPS_HOST);
+		if (httpsHost != null) {
+			sslConnector.setHost(httpsHost);
+		}
 
 		if (sslConnector.getPort() == 0) {
 			try {
@@ -272,6 +271,7 @@ public class HttpServerManager implements ManagedServiceFactory {
 				e.printStackTrace();
 			}
 		}
+
 		return sslConnector;
 	}
 
